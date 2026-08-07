@@ -170,9 +170,14 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterTag, setFilterTag] = useState("todos");
   const [deliveryModal, setDeliveryModal] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(null);
 
   useEffect(() => {
-    loadBatches().then(data => { setBatches(data); setLoading(false); });
+    loadBatches((p) => setUploadProgress(p)).then(data => {
+      setBatches(data);
+      setLoading(false);
+      setUploadProgress(null);
+    });
   }, []);
 
   const persistBatch = useCallback(async (batch) => {
@@ -185,6 +190,7 @@ export default function App() {
     const reader = new FileReader();
     reader.onload = async (e) => {
       let items = [];
+      setUploadProgress({ step: 0, total: 1, message: "Leyendo archivo..." });
       try {
         if (["xlsx", "xls", "xlsm"].includes(ext)) {
           const wb = XLSX.read(new Uint8Array(e.target.result), { type: "array" });
@@ -192,8 +198,9 @@ export default function App() {
         } else {
           items = parseFileData(Papa.parse(e.target.result, { header: true, skipEmptyLines: true, dynamicTyping: true }).data);
         }
-      } catch (err) { setUploadMsg({ type: "error", text: "Error: " + err.message }); return; }
-      if (items.length === 0) { setUploadMsg({ type: "error", text: "No se encontraron productos válidos." }); return; }
+      } catch (err) { setUploadProgress(null); setUploadMsg({ type: "error", text: "Error: " + err.message }); return; }
+      if (items.length === 0) { setUploadProgress(null); setUploadMsg({ type: "error", text: "No se encontraron productos válidos." }); return; }
+      setUploadProgress({ step: 0, total: 1, message: `${items.length.toLocaleString()} productos encontrados. Subiendo a base de datos...` });
       const sections = getSections(items);
       const batch = {
         id: Date.now().toString(), createdAt: Date.now(),
@@ -202,10 +209,16 @@ export default function App() {
         totalPiezas: items.reduce((s, it) => s + it.cantidad, 0),
         sectionDeliveries: {}, status: STATUS.PENDING,
       };
-      await persistBatch(batch);
-      setBatches(prev => [batch, ...prev]);
-      setUploadMsg({ type: "ok", text: `✅ ${items.length} productos en ${sections.length} sección(es) cargados.` });
-      setTimeout(() => setUploadMsg(null), 5000);
+      try {
+        await saveBatch(batch, (p) => setUploadProgress(p));
+        setBatches(prev => [batch, ...prev]);
+        setUploadProgress(null);
+        setUploadMsg({ type: "ok", text: `✅ ${items.length.toLocaleString()} productos en ${sections.length} sección(es) cargados.` });
+        setTimeout(() => setUploadMsg(null), 5000);
+      } catch (err) {
+        setUploadProgress(null);
+        setUploadMsg({ type: "error", text: "Error al guardar: " + err.message });
+      }
     };
     ["xlsx", "xls", "xlsm"].includes(ext) ? reader.readAsArrayBuffer(file) : reader.readAsText(file);
   };
@@ -290,9 +303,17 @@ export default function App() {
   const goBack = () => { if (selectedSection) setSelectedSection(null); else { setSelectedBatch(null); setSelectedSection(null); } setSearchTerm(""); setFilterTag("todos"); };
 
   if (loading) return (
-    <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "100vh", fontFamily: "'Inter', system-ui, sans-serif", color: "#64748B", gap: 10 }}>
+    <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "100vh", fontFamily: "'Inter', system-ui, sans-serif", color: "#64748B", gap: 10, padding: 20 }}>
       <div style={{ width: 32, height: 32, border: "3px solid #E2E8F0", borderTopColor: "#3B82F6", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-      <p>Cargando datos...</p>
+      <p style={{ fontSize: 14, fontWeight: 600 }}>{uploadProgress?.message || "Cargando datos..."}</p>
+      {uploadProgress && (
+        <div style={{ width: "80%", maxWidth: 300 }}>
+          <div style={{ height: 6, background: "#E2E8F0", borderRadius: 3, overflow: "hidden" }}>
+            <div style={{ height: "100%", background: "#3B82F6", borderRadius: 3, width: `${uploadProgress.total ? Math.round((uploadProgress.step / uploadProgress.total) * 100) : 0}%`, transition: "width .3s" }} />
+          </div>
+          <p style={{ textAlign: "center", fontSize: 11, color: "#94A3B8", marginTop: 4 }}>{uploadProgress.step}/{uploadProgress.total}</p>
+        </div>
+      )}
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
@@ -405,6 +426,21 @@ export default function App() {
               <p style={{ margin: "4px 0 0", fontSize: 12, color: "#94A3B8" }}>XLSX, CSV o TXT</p>
               <input id="fileInput" type="file" accept=".csv,.txt,.tsv,.xlsx,.xls,.xlsm" style={{ display: "none" }} onChange={(e) => { handleFile(e.target.files[0]); e.target.value = ""; }} />
             </div>
+            {uploadProgress && !loading && (
+              <div style={{ marginTop: 12, padding: "14px", background: "#fff", borderRadius: 10, boxShadow: "0 1px 3px rgba(0,0,0,.05)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                  <div style={{ width: 20, height: 20, border: "2.5px solid #E2E8F0", borderTopColor: "#3B82F6", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#1E293B" }}>{uploadProgress.message}</p>
+                </div>
+                <div style={{ height: 8, background: "#E2E8F0", borderRadius: 4, overflow: "hidden" }}>
+                  <div style={{ height: "100%", background: "linear-gradient(90deg, #3B82F6, #10B981)", borderRadius: 4, width: `${uploadProgress.total ? Math.round((uploadProgress.step / uploadProgress.total) * 100) : 5}%`, transition: "width .5s ease" }} />
+                </div>
+                <p style={{ margin: "6px 0 0", fontSize: 11, color: "#94A3B8", textAlign: "center" }}>
+                  {uploadProgress.total ? `${Math.round((uploadProgress.step / uploadProgress.total) * 100)}%` : "Procesando..."}
+                </p>
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+              </div>
+            )}
             {uploadMsg && <div style={{ marginTop: 10, padding: "10px 14px", borderRadius: 8, fontSize: 13, fontWeight: 500, background: uploadMsg.type === "ok" ? "#D1FAE5" : "#FEE2E2", color: uploadMsg.type === "ok" ? "#065F46" : "#991B1B" }}>{uploadMsg.text}</div>}
           </div>
         )}
