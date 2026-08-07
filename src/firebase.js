@@ -1,17 +1,14 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, doc, getDocs, setDoc, deleteDoc, query, orderBy } from "firebase/firestore";
 
-// =====================================================
-// 🔴 IMPORTANTE: Reemplaza estos valores con los tuyos
-// Los encuentras en Firebase Console → Configuración del proyecto → Tus apps
-// =====================================================
 const firebaseConfig = {
-  apiKey: "PEGA_TU_API_KEY_AQUI",
-  authDomain: "PEGA_TU_AUTH_DOMAIN_AQUI",
-  projectId: "PEGA_TU_PROJECT_ID_AQUI",
-  storageBucket: "PEGA_TU_STORAGE_BUCKET_AQUI",
-  messagingSenderId: "PEGA_TU_SENDER_ID_AQUI",
-  appId: "PEGA_TU_APP_ID_AQUI"
+  apiKey: "AIzaSyAFiFbRylxcOVcwKizIW_nORwvz7-hvfl4",
+  authDomain: "control-precios-78.firebaseapp.com",
+  projectId: "control-precios-78",
+  storageBucket: "control-precios-78.firebasestorage.app",
+  messagingSenderId: "781995819353",
+  appId: "1:781995819353:web:99c251e493c8510c7e4c48",
+  measurementId: "G-7BS4N7Y7EK"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -19,13 +16,10 @@ const db = getFirestore(app);
 
 const BATCHES_COL = "batches";
 
-// Las firmas se guardan directamente en Firestore como texto (base64)
-// No necesita Firebase Storage ni plan Blaze
 export async function uploadSignature(batchId, sectionName, dataUrl) {
-  return dataUrl; // Se guarda directo en el documento de Firestore
+  return dataUrl;
 }
 
-// Load all batches
 export async function loadBatches() {
   try {
     const q = query(collection(db, BATCHES_COL), orderBy("createdAt", "desc"));
@@ -37,7 +31,6 @@ export async function loadBatches() {
   }
 }
 
-// Save a single batch
 export async function saveBatch(batch) {
   try {
     const { id, ...data } = batch;
@@ -47,7 +40,6 @@ export async function saveBatch(batch) {
   }
 }
 
-// Delete a batch
 export async function deleteBatchFromDB(batchId) {
   try {
     await deleteDoc(doc(db, BATCHES_COL, batchId));
@@ -56,7 +48,6 @@ export async function deleteBatchFromDB(batchId) {
   }
 }
 
-// Delete all batches
 export async function deleteAllBatches() {
   try {
     const snapshot = await getDocs(collection(db, BATCHES_COL));
