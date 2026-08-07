@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
-import { loadBatches, saveBatch, deleteBatchFromDB, deleteAllBatches, uploadSignature } from "./firebase.js";
+import { loadBatches, saveBatch, updateBatchMeta, updateBatchItem, updateBatchItems, deleteBatchFromDB, deleteAllBatches, uploadSignature } from "./firebase.js";
 
 const STATUS = { PENDING: "pendiente", DELIVERED: "entregado", VERIFIED: "verificado", REJECTED: "rechazado" };
 const STATUS_COLORS = {
@@ -179,13 +179,6 @@ export default function App() {
     await saveBatch(batch);
   }, []);
 
-  const updateBatches = useCallback((updater) => {
-    setBatches(prev => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      return next;
-    });
-  }, []);
-
   const handleFile = (file) => {
     if (!file) return;
     const ext = file.name.split(".").pop().toLowerCase();
@@ -222,10 +215,18 @@ export default function App() {
       const next = prev.map(b => {
         if (b.id !== batchId) return b;
         const sd = { ...b.sectionDeliveries, [sectionName]: deliveryData };
-        const newItems = b.items.map(it => (it.seccion || "Sin sección") === sectionName ? { ...it, status: STATUS.DELIVERED } : it);
+        const changedItems = [];
+        const newItems = b.items.map(it => {
+          if ((it.seccion || "Sin sección") === sectionName) {
+            const updated = { ...it, status: STATUS.DELIVERED };
+            changedItems.push(updated);
+            return updated;
+          }
+          return it;
+        });
         const nb = { ...b, sectionDeliveries: sd, items: newItems };
         nb.status = getBatchStatus(nb);
-        persistBatch(nb);
+        updateBatchItems(nb, changedItems);
         if (selectedBatch?.id === batchId) setSelectedBatch(nb);
         return nb;
       });
@@ -237,9 +238,13 @@ export default function App() {
   const updateItemStatus = (batchId, itemId, newStatus, note) => {
     setBatches(prev => prev.map(b => {
       if (b.id !== batchId) return b;
-      const items = b.items.map(it => it.id === itemId ? { ...it, status: newStatus, auditNote: note !== undefined ? note : it.auditNote } : it);
+      const updatedItem = b.items.find(it => it.id === itemId);
+      if (!updatedItem) return b;
+      const newItem = { ...updatedItem, status: newStatus, auditNote: note !== undefined ? note : updatedItem.auditNote };
+      const items = b.items.map(it => it.id === itemId ? newItem : it);
       const nb = { ...b, items }; nb.status = getBatchStatus(nb);
-      persistBatch(nb);
+      updateBatchItem(batchId, newItem);
+      updateBatchMeta(nb);
       if (selectedBatch?.id === batchId) setSelectedBatch(nb);
       return nb;
     }));
@@ -248,9 +253,17 @@ export default function App() {
   const markSectionVerified = (batchId, sectionName) => {
     setBatches(prev => prev.map(b => {
       if (b.id !== batchId) return b;
-      const items = b.items.map(it => (it.seccion || "Sin sección") === sectionName ? { ...it, status: STATUS.VERIFIED } : it);
+      const changedItems = [];
+      const items = b.items.map(it => {
+        if ((it.seccion || "Sin sección") === sectionName) {
+          const updated = { ...it, status: STATUS.VERIFIED };
+          changedItems.push(updated);
+          return updated;
+        }
+        return it;
+      });
       const nb = { ...b, items }; nb.status = getBatchStatus(nb);
-      persistBatch(nb);
+      updateBatchItems(nb, changedItems);
       if (selectedBatch?.id === batchId) setSelectedBatch(nb);
       return nb;
     }));
