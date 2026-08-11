@@ -32,22 +32,36 @@ function SignaturePad({ onSave, onCancel }) {
   const canvasRef = useRef(null);
   const [drawing, setDrawing] = useState(false);
   const [hasDrawn, setHasDrawn] = useState(false);
+
+  // Fill canvas with white on mount so JPEG doesn't have black background
+  useEffect(() => {
+    const ctx = canvasRef.current.getContext("2d");
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+  }, []);
+
   const getPos = (e) => { const rect = canvasRef.current.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return { x: (t.clientX - rect.left) * (canvasRef.current.width / rect.width), y: (t.clientY - rect.top) * (canvasRef.current.height / rect.height) }; };
   const startDraw = (e) => { e.preventDefault(); const ctx = canvasRef.current.getContext("2d"); const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); setDrawing(true); };
   const draw = (e) => { if (!drawing) return; e.preventDefault(); const ctx = canvasRef.current.getContext("2d"); const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.strokeStyle = "#1E293B"; ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.stroke(); setHasDrawn(true); };
   const stopDraw = () => setDrawing(false);
-  const clear = () => { canvasRef.current.getContext("2d").clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); setHasDrawn(false); };
+  const clear = () => { const ctx = canvasRef.current.getContext("2d"); ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height); setHasDrawn(false); };
+
+  const saveSignature = () => {
+    if (!hasDrawn) return;
+    onSave(canvasRef.current.toDataURL("image/jpeg", 0.5));
+  };
+
   return (
     <div>
       <canvas ref={canvasRef} width={280} height={120}
-        style={{ border: "1px solid #CBD5E1", borderRadius: 8, width: "100%", height: 130, touchAction: "none", cursor: "crosshair", background: "#FAFBFC" }}
+        style={{ border: "1px solid #CBD5E1", borderRadius: 8, width: "100%", height: 130, touchAction: "none", cursor: "crosshair", background: "#fff" }}
         onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
         onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw} />
       <p style={{ margin: "4px 0 8px", fontSize: 10, color: "#94A3B8", textAlign: "center" }}>Firma con dedo o mouse</p>
       <div style={{ display: "flex", gap: 6 }}>
         <button onClick={clear} style={{ flex: 1, padding: 7, background: "#F1F5F9", color: "#64748B", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Borrar</button>
         <button onClick={onCancel} style={{ flex: 1, padding: 7, background: "#FEE2E2", color: "#991B1B", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Cancelar</button>
-        <button onClick={() => hasDrawn && onSave(canvasRef.current.toDataURL("image/jpeg", 0.3))} disabled={!hasDrawn}
+        <button onClick={saveSignature} disabled={!hasDrawn}
           style={{ flex: 1, padding: 7, background: hasDrawn ? "#3B82F6" : "#CBD5E1", color: "#fff", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: hasDrawn ? "pointer" : "not-allowed" }}>Confirmar</button>
       </div>
     </div>
@@ -98,17 +112,30 @@ function SectionDeliveryModal({ section, batchId, onConfirm, onCancel }) {
 }
 
 function SectionReceipt({ delivery }) {
+  const [zoomSig, setZoomSig] = useState(false);
   if (!delivery) return null;
   return (
-    <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: "8px 10px", marginBottom: 6 }}>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        {delivery.signature && <img src={delivery.signature} alt="Firma" style={{ height: 36, borderRadius: 4, border: "1px solid #BBF7D0", background: "#fff" }} />}
-        <div>
-          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: "#065F46" }}>📝 {delivery.receiverName}</p>
-          <p style={{ margin: "1px 0 0", fontSize: 10, color: "#64748B" }}>{delivery.deliveredAt}</p>
+    <>
+      {zoomSig && delivery.signature && (
+        <div onClick={() => setZoomSig(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, padding: 20, cursor: "pointer" }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 16, maxWidth: 500, width: "100%", textAlign: "center" }} onClick={e => e.stopPropagation()}>
+            <p style={{ margin: "0 0 8px", fontSize: 14, fontWeight: 700, color: "#1E293B" }}>📝 Firma de {delivery.receiverName}</p>
+            <p style={{ margin: "0 0 10px", fontSize: 12, color: "#64748B" }}>{delivery.deliveredAt}</p>
+            <img src={delivery.signature} alt="Firma" style={{ width: "100%", maxHeight: 300, objectFit: "contain", borderRadius: 8, border: "1px solid #E2E8F0", background: "#fff" }} />
+            <button onClick={() => setZoomSig(false)} style={{ marginTop: 12, padding: "8px 20px", background: "#F1F5F9", color: "#64748B", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cerrar</button>
+          </div>
+        </div>
+      )}
+      <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: "8px 10px", marginBottom: 6 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          {delivery.signature && <img src={delivery.signature} alt="Firma" onClick={() => setZoomSig(true)} style={{ height: 36, borderRadius: 4, border: "1px solid #BBF7D0", background: "#fff", cursor: "pointer" }} title="Clic para ver más grande" />}
+          <div>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: "#065F46" }}>📝 {delivery.receiverName}</p>
+            <p style={{ margin: "1px 0 0", fontSize: 10, color: "#64748B" }}>{delivery.deliveredAt}</p>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -192,6 +219,7 @@ export default function App() {
   const [filterTag, setFilterTag] = useState("todos");
   const [deliveryModal, setDeliveryModal] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(null);
+  const [zoomImage, setZoomImage] = useState(null);
 
   useEffect(() => {
     loadBatches((p) => setUploadProgress(p)).then(data => {
@@ -417,6 +445,16 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#F8FAFC", minHeight: "100vh", color: "#1E293B" }}>
+      {zoomImage && (
+        <div onClick={() => setZoomImage(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, padding: 20, cursor: "pointer" }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 16, maxWidth: 500, width: "100%", textAlign: "center" }} onClick={e => e.stopPropagation()}>
+            <p style={{ margin: "0 0 8px", fontSize: 14, fontWeight: 700, color: "#1E293B" }}>📝 Firma de {zoomImage.name}</p>
+            <p style={{ margin: "0 0 10px", fontSize: 12, color: "#64748B" }}>{zoomImage.date}</p>
+            <img src={zoomImage.src} alt="Firma" style={{ width: "100%", maxHeight: 300, objectFit: "contain", borderRadius: 8, border: "1px solid #E2E8F0", background: "#fff" }} />
+            <button onClick={() => setZoomImage(null)} style={{ marginTop: 12, padding: "8px 20px", background: "#F1F5F9", color: "#64748B", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cerrar</button>
+          </div>
+        </div>
+      )}
       {deliveryModal && <SectionDeliveryModal section={deliveryModal.section} batchId={deliveryModal.batchId} onConfirm={(d) => confirmSectionDelivery(deliveryModal.batchId, deliveryModal.section.name, d)} onCancel={() => setDeliveryModal(null)} />}
 
       <div style={{ background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)", padding: "18px 20px 12px" }}>
@@ -599,7 +637,7 @@ export default function App() {
                       const del = b.sectionDeliveries?.[s.name];
                       return del ? (
                         <div key={s.name} style={{ marginBottom: 4, padding: "6px 10px", background: "#F0FDF4", borderRadius: 6, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                          {del.signature && <img src={del.signature} alt="Firma" style={{ height: 28, borderRadius: 4, border: "1px solid #BBF7D0" }} />}
+                          {del.signature && <img src={del.signature} alt="Firma" onClick={() => setZoomImage({ src: del.signature, name: del.receiverName, date: del.deliveredAt })} style={{ height: 28, borderRadius: 4, border: "1px solid #BBF7D0", background: "#fff", cursor: "pointer" }} title="Clic para ver más grande" />}
                           <div>
                             <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: "#065F46" }}>📍 {s.name} → {del.receiverName}</p>
                             <p style={{ margin: 0, fontSize: 10, color: "#64748B" }}>{del.deliveredAt} · ✅{s.items.filter(i => i.status === STATUS.VERIFIED).length}/{s.items.length}</p>
