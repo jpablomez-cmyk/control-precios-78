@@ -303,13 +303,23 @@ export default function App() {
     }));
   };
 
+  const DELETE_PASSWORD = "Operaciones78";
+
+  const askDeletePassword = () => {
+    const input = prompt("🔒 Escribe la contraseña para eliminar:");
+    return input === DELETE_PASSWORD;
+  };
+
   const handleDeleteBatch = async (batchId) => {
+    if (!askDeletePassword()) { alert("❌ Contraseña incorrecta"); return; }
     await deleteBatchFromDB(batchId);
     setBatches(prev => prev.filter(b => b.id !== batchId));
     if (selectedBatch?.id === batchId) { setSelectedBatch(null); setSelectedSection(null); }
   };
 
   const handleDeleteAll = async () => {
+    if (!askDeletePassword()) { alert("❌ Contraseña incorrecta"); return; }
+    if (!confirm("⚠️ ¿Estás seguro de eliminar TODO el historial?")) return;
     await deleteAllBatches();
     setBatches([]);
   };
@@ -581,7 +591,7 @@ export default function App() {
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <button onClick={(e) => { e.stopPropagation(); downloadBatchXLSX(b); }} style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", cursor: "pointer", fontSize: 11, color: "#1E40AF", padding: "3px 8px", borderRadius: 4, fontWeight: 600 }} title="Descargar">📥 XLSX</button>
                         <StatusBadge status={b.status} />
-                        <button onClick={() => { if (confirm("¿Eliminar?")) handleDeleteBatch(b.id); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#CBD5E1", padding: 2 }}>🗑️</button>
+                        <button onClick={() => { handleDeleteBatch(b.id); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#CBD5E1", padding: 2 }}>🗑️</button>
                       </div>
                     </div>
                     <p style={{ margin: "2px 0 6px", fontSize: 11, color: "#94A3B8" }}>{b.fecha} · {b.items.length} prod</p>
@@ -600,7 +610,7 @@ export default function App() {
                   </div>
                 );
               })}
-              <button onClick={() => { if (confirm("¿Eliminar TODO?")) handleDeleteAll(); }}
+              <button onClick={() => { handleDeleteAll(); }}
                 style={{ marginTop: 10, padding: 10, background: "#FEE2E2", color: "#991B1B", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", width: "100%" }}>🗑️ Limpiar historial</button>
             </>}
           </div>
