@@ -39,7 +39,7 @@ function SignaturePad({ onSave, onCancel }) {
   const clear = () => { canvasRef.current.getContext("2d").clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); setHasDrawn(false); };
   return (
     <div>
-      <canvas ref={canvasRef} width={640} height={260}
+      <canvas ref={canvasRef} width={280} height={120}
         style={{ border: "1px solid #CBD5E1", borderRadius: 8, width: "100%", height: 130, touchAction: "none", cursor: "crosshair", background: "#FAFBFC" }}
         onMouseDown={startDraw} onMouseMove={draw} onMouseUp={stopDraw} onMouseLeave={stopDraw}
         onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={stopDraw} />
@@ -47,7 +47,7 @@ function SignaturePad({ onSave, onCancel }) {
       <div style={{ display: "flex", gap: 6 }}>
         <button onClick={clear} style={{ flex: 1, padding: 7, background: "#F1F5F9", color: "#64748B", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Borrar</button>
         <button onClick={onCancel} style={{ flex: 1, padding: 7, background: "#FEE2E2", color: "#991B1B", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>Cancelar</button>
-        <button onClick={() => hasDrawn && onSave(canvasRef.current.toDataURL("image/png"))} disabled={!hasDrawn}
+        <button onClick={() => hasDrawn && onSave(canvasRef.current.toDataURL("image/jpeg", 0.3))} disabled={!hasDrawn}
           style={{ flex: 1, padding: 7, background: hasDrawn ? "#3B82F6" : "#CBD5E1", color: "#fff", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: hasDrawn ? "pointer" : "not-allowed" }}>Confirmar</button>
       </div>
     </div>
@@ -156,6 +156,27 @@ function getBatchStatus(batch) {
   if (allDelivered) return STATUS.DELIVERED;
   if (sections.some(s => batch.sectionDeliveries?.[s.name])) return STATUS.DELIVERED;
   return STATUS.PENDING;
+}
+
+// Download batch as XLSX - uses data already in memory, 0 Firebase reads
+function downloadBatchXLSX(batch) {
+  const rows = batch.items.map(it => ({
+    "SKU": it.sku,
+    "MODELO": it.modelo,
+    "Precio Anterior": it.precioAnterior,
+    "Precio Actual": it.precioNuevo,
+    "Sección": it.seccion,
+    "Cantidad": it.cantidad,
+    "Tipo Etiqueta": it.tipoEtiqueta,
+    "Estado": it.status,
+    "Nota Auditoría": it.auditNote || "",
+    "Entregado a": batch.sectionDeliveries?.[(it.seccion || "Sin sección")]?.receiverName || "",
+    "Fecha Entrega": batch.sectionDeliveries?.[(it.seccion || "Sin sección")]?.deliveredAt || "",
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Productos");
+  XLSX.writeFile(wb, `${batch.archivo.replace(/\.[^.]+$/, "")}_reporte.xlsx`);
 }
 
 export default function App() {
@@ -465,6 +486,7 @@ export default function App() {
                     <h3 style={{ margin: 0, fontSize: 14 }}>{selectedBatch.archivo}</h3>
                     <p style={{ margin: "2px 0", fontSize: 11, color: "#94A3B8" }}>{selectedBatch.fecha}</p>
                     {(() => { const secs = getSections(selectedBatch.items); const del = secs.filter(s => selectedBatch.sectionDeliveries?.[s.name]).length; return <p style={{ margin: "4px 0 0", fontSize: 12, fontWeight: 600, color: del === secs.length ? "#10B981" : "#F59E0B" }}>{del}/{secs.length} secciones entregadas</p>; })()}
+                    <button onClick={() => downloadBatchXLSX(selectedBatch)} style={{ marginTop: 8, padding: "7px 14px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 8, fontSize: 12, fontWeight: 600, color: "#1E40AF", cursor: "pointer", width: "100%" }}>📥 Descargar reporte XLSX</button>
                   </div>
                   {getSections(selectedBatch.items).map(s => renderSectionCard(s, selectedBatch, true, true))}
                 </div>
@@ -557,6 +579,7 @@ export default function App() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <h4 style={{ margin: 0, fontSize: 13 }}>{b.archivo}</h4>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <button onClick={(e) => { e.stopPropagation(); downloadBatchXLSX(b); }} style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", cursor: "pointer", fontSize: 11, color: "#1E40AF", padding: "3px 8px", borderRadius: 4, fontWeight: 600 }} title="Descargar">📥 XLSX</button>
                         <StatusBadge status={b.status} />
                         <button onClick={() => { if (confirm("¿Eliminar?")) handleDeleteBatch(b.id); }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "#CBD5E1", padding: 2 }}>🗑️</button>
                       </div>
